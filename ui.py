@@ -1,3 +1,49 @@
+"""
+Module creating ui for password manager
+
+Classes:
+    ManagerInterface
+    NewEncryptionInterface(ManagerInterface)
+    CheckEncryptionInterface(ManagerInterface)
+
+Methods:
+
+    ManagerInterface:
+        search_password()
+            search in data file if password for a given website has been stored already
+        save_password()
+            save username/email and password for given website in the data file
+        generate_password()
+            generate random password
+        encrypt_data()
+            encrypt data, so it can be protected while stored on the drive
+        decrypt_data()
+            decrypt data from the encrypted file
+
+    NewEncryptionInterface:
+        encryption_key_setup()
+            creates an encryption key, contained of 32 alphanumeric characters and store it hashed in the file
+    CheckEncryptionInterface:
+        encryption_key_check()
+            checks if the key entered by the user is the same as the one stored in the file
+
+Static Functions:
+    save_file()
+        saves bytes to file
+
+Constants:
+    BLACK
+        the color of the theme
+    LABEL_FONT
+        font settings for the labels
+    ENTRY_FONT
+        font settings for the entry boxes
+    LETTERS_LOWER, LETTERS_UPPER, NUMBERS, SYMBOLS
+        list of different characters used to generate random password
+    ENCRYPTION_REQUEST_TEXT
+        stored text used in the NewEncryption window
+"""
+
 from tkinter import *
 from tkinter import messagebox
 from random import randint, shuffle, choice
@@ -17,13 +63,23 @@ NUMBERS = '0 1 2 3 4 5 6 7 8 9'.split()
 SYMBOLS = '! ? @ # : & * % $ ^'.split()
 ENCRYPTION_REQUEST_TEXT = "Please set up an encryption key to protect your passwords. Please enter exactly " \
                           "32 alphanumeric characters and simple symbols. The key should be easy to remember, " \
-                          "for example, use a sequence of random words." \
-
+                          "for example, use a sequence of random words."
 
 
 class ManagerInterface(Tk):
+    """ Class creating the main GUI for the password manager
+
+    Attributes:
+         authorization_key (string)
+            key used for encryption
+         'save_password' (function)
+            function saving encrypted data to the file
+    """
 
     def __init__(self):
+        """
+        Constructor of the ManagerInterface class
+        """
 
         super().__init__()
         self.authorization_key = ""
@@ -85,8 +141,8 @@ class ManagerInterface(Tk):
         self.mainframe.grid_columnconfigure(2, weight=1)
 
         try:
-            with open('hashed_key.txt', mode='r') as file:
-                 contents = file.read()
+            open('hashed_key.txt', mode='r')
+
         except FileNotFoundError:
             NewEncryptionInterface(self)
         else:
@@ -102,11 +158,12 @@ class ManagerInterface(Tk):
 
         website = self.web_entry.get()
         try:
-            with open("data.json", "r") as file:
-                data = json.load(file)
+            with open("data.txt", "rb") as file:
+                data = file.read()
         except FileNotFoundError:
             messagebox.showinfo(title="File not found", message="No Data File Found")
         else:
+            data = self.decrypt_data(data)
             if website.capitalize() in data:
                 user_name = data[website.capitalize()]["email"]
                 stored_pass = data[website.capitalize()]["password"]
@@ -116,6 +173,7 @@ class ManagerInterface(Tk):
                 messagebox.showinfo(title=website, message="There are no details for this Website yet")
         finally:
             self.web_entry.delete(0, END)
+            del data
 
     def generate_password(self) -> None:
         """Generate a random password using letters, numbers and symbols
@@ -131,7 +189,6 @@ class ManagerInterface(Tk):
         self.password_entry.delete(0, END)
         self.password_entry.insert(0, password)
         pyperclip.copy(password)
-    # ---------------------------- SAVE PASSWORD ------------------------------- #
 
     def save_password(self) -> None:
         """
@@ -152,26 +209,61 @@ class ManagerInterface(Tk):
                                                               "the fields")
         else:
             try:
-                with open("data.json", "r") as file:
+                with open("data.txt", "rb") as file:
                     # load old data
-                    data = json.load(file)
+                    data = file.read()
+                data = self.decrypt_data(data)
             except FileNotFoundError:
                 # save new data and create the file
-                save_to_json("data.json", new_data)
+                new_data = self.encrypt_data(new_data)
+                save_file("data.txt", new_data)
             else:
                 # update data with new data
                 data.update(new_data)
-                save_to_json("data.json", data)
+                data = self.encrypt_data(data)
+                save_file("data.txt", data)
+                del data
             finally:
                 self.web_entry.delete(0, END)
                 self.email_entry.delete(0, END)
                 self.email_entry.insert(0, "example@email.com")
                 self.password_entry.delete(0, END)
 
+    def encrypt_data(self, data_file: dict) -> object:
+        """
+        Encrypt data using the authorization key
+        :param data_file: json data
+        :return: encrypted data as an object of Fernet class
+        """
+        data_file = base64.b64encode(str(data_file).encode('utf-8'))
+        data_file = Fernet(base64.b64encode(self.authorization_key)).encrypt(data_file)
+        return data_file
+
+    def decrypt_data(self, data_file: object) -> dict:
+        """
+        Decrypt given data
+        :param data_file: an encrypted data as a Fernet class object
+        :return: decrypted data as a JSON
+        """
+        data_file = Fernet(base64.b64encode(self.authorization_key)).decrypt(data_file)
+        data_file = base64.b64decode(data_file)
+        data_file = data_file.decode("utf-8").replace("'", "\"")
+        data_file = json.loads(data_file)
+        return data_file
+
 
 class NewEncryptionInterface:
+    """
+    Class that creates interface for setting up an encryption key if the user opens the program for the first time.
 
+    Attributes:
+        manager (object): object from main window class
+    """
     def __init__(self, mng_interface: ManagerInterface):
+        """
+        Constructor of NewEncryptionInterface class. Creates the Toplevel object of the Tkinter class
+        :param mng_interface: an object from main window class
+        """
 
         self.manager = mng_interface
         self.top = Toplevel()
@@ -230,10 +322,9 @@ class NewEncryptionInterface:
         self.enter_button.grid(row=7, column=0, pady=(0, 10))
 
     def encryption_key_setup(self):
-        """Function for setting up an encryption key the first time the user opens the program.
-        Checks that the two key entered matches the confirmatory key and checks that the key 32 bytes long.
-        Finally, if the key meets the criteria, it is hashed and saved to a text file and the main window is opened
-        Takes the two keys entered by the user."""
+        """Check if the entered key matches the confirmatory key and check if the key is 32 bytes long.
+        If it matches the criteria, hash the key and save it to a text file. Finally open the main window"""
+
         key_1 = self.password_input.get().encode('utf-8')
         key_2 = self.confirmation_input.get().encode('utf-8')
 
@@ -262,8 +353,18 @@ class NewEncryptionInterface:
 
 
 class CheckEncryptionInterface:
+    """Class that creates the interface to validate the access to the password manager
+
+    Attributes:
+        manager (object)
+            object of the main window class
+    """
 
     def __init__(self, mng_interface: ManagerInterface):
+        """
+        Constructor of the class
+        :param mng_interface: object of the main window class
+        """
 
         self.manager = mng_interface
         self.top = Toplevel()
@@ -296,8 +397,7 @@ class CheckEncryptionInterface:
         self.login_button.grid(row=4, column=0)
 
     def encryption_key_check(self):
-        """Checks that the user entered encryption key is correct by comparing to a saved hashed key.
-        Takes the key entered by the user as an argument."""
+        """Check if the encryption key entered by the user is correct by comparing it to a saved hashed key"""
 
         key_1 = self.password_input.get().encode('utf-8')
         with open('hashed_key.txt', mode='r') as key_file:
@@ -314,13 +414,13 @@ class CheckEncryptionInterface:
             messagebox.showerror(title='Incorrect key', message='The encryption key entered is incorrect. '
                                                                 'Please try again.')
 
-def save_to_json(file_name: str, data_file: dict) -> None:
-    """
-    Open a json file in a write mode and save the data_file.
 
-    :param file_name: name of the file with extension
-    :param data_file: data saved as a dictionary
+def save_file(file_name: str, data_file: object) -> None:
     """
-    with open(f"{file_name}", "w") as file:
-        # save data
-        json.dump(data_file, file, indent=4)
+    Function that saves data to a file
+    :param file_name: string containing name of the file to be saved
+    :param data_file: object containing encrypted data
+    """
+
+    with open(f"{file_name}", "wb") as file:
+        file.write(data_file)
