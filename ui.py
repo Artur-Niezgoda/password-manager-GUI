@@ -1,70 +1,46 @@
 """
-Module creating ui for password manager
+This module contains a GUI for a password manager that includes classes for managing and encrypting passwords.
 
 Classes:
-    ManagerInterface
-    NewEncryptionInterface(ManagerInterface)
-    CheckEncryptionInterface(ManagerInterface)
 
+ManagerInterface: 
+    This is the main interface for managing passwords. It has methods for searching, saving, generating, encrypting, and decrypting passwords.
+NewEncryptionInterface: 
+    This interface is used to set up a new encryption key and store it in a hashed file.
+CheckEncryptionInterface: 
+    This interface is used to check if an entered encryption key is the same as the one stored in the file.
 Methods:
 
-    ManagerInterface:
-        search_password()
-            search in data file if password for a given website has been stored already
-        save_password()
-            save username/email and password for given website in the data file
-        generate_password()
-            generate random password
-        encrypt_data()
-            encrypt data, so it can be protected while stored on the drive
-        decrypt_data()
-            decrypt data from the encrypted file
-
-    NewEncryptionInterface:
-        encryption_key_setup()
-            creates an encryption key, contained of 32 alphanumeric characters and store it hashed in the file
-    CheckEncryptionInterface:
-        encryption_key_check()
-            checks if the key entered by the user is the same as the one stored in the file
+ManagerInterface.search_password(): 
+    This method searches the data file to see if a password has already been stored for a given website.
+ManagerInterface.save_password(): 
+    This method saves a username/email and password for a given website to the data file.
+ManagerInterface.generate_password(): 
+    This method generates a random password using a combination of lowercase letters, uppercase letters, numbers, and symbols.
+ManagerInterface.encrypt_data(): 
+    This method encrypts the data in the data file using Fernet encryption from the cryptography module.
+ManagerInterface.decrypt_data(): 
+    This method decrypts the data in the data file using Fernet decryption from the cryptography module.
+NewEncryptionInterface.encryption_key_setup(): 
+    This method sets up a new encryption key by having the user enter a 32-character alphanumeric and symbol sequence, then hashes and stores it in a file.
+CheckEncryptionInterface.encryption_key_check(): 
+    This method checks if an entered encryption key is the same as the one stored in the hashed file.
 
 Static Functions:
-    save_file()
-        saves bytes to file
 
+save_file(): 
+    This function is used to save bytes to a file.
 Constants:
-    BLACK
-        the color of the theme
-    LABEL_FONT
-        font settings for the labels
-    ENTRY_FONT
-        font settings for the entry boxes
-    LETTERS_LOWER, LETTERS_UPPER, NUMBERS, SYMBOLS
-        list of different characters used to generate random password
-    ENCRYPTION_REQUEST_TEXT
-        stored text used in the NewEncryption window
+
+BLACK: A color theme for the GUI.
+LABEL_FONT: Font settings for labels.
+ENTRY_FONT: Font settings for entry boxes.
+LETTERS_LOWER: List of lowercase letters used to generate random passwords.
+LETTERS_UPPER: List of uppercase letters used to generate random passwords.
+NUMBERS: List of numbers used to generate random passwords.
+SYMBOLS: List of symbols used to generate random passwords.
+ENCRYPTION_REQUEST_TEXT: Text displayed in the NewEncryptionInterface window to prompt the user to enter an encryption key.
 """
-
-from tkinter import *
-from tkinter import messagebox
-from random import randint, shuffle, choice
-from cryptography.fernet import Fernet
-import bcrypt
-import pyperclip
-import json
-import base64
-
-
-BLACK = '#323131'
-LABEL_FONT = ("Ariel", 11, "bold")
-ENTRY_FONT = ("Ariel", 11)
-LETTERS_LOWER = 'a b c d e f g h i j k l m n o p q r s t u v w x y z'.split()
-LETTERS_UPPER = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z'.split()
-NUMBERS = '0 1 2 3 4 5 6 7 8 9'.split()
-SYMBOLS = '! ? @ # : & * % $ ^'.split()
-ENCRYPTION_REQUEST_TEXT = "Please set up an encryption key to protect your passwords. Please enter exactly " \
-                          "32 alphanumeric characters and simple symbols. The key should be easy to remember, " \
-                          "for example, use a sequence of random words."
-
 
 class ManagerInterface(Tk):
     """ Class creating the main GUI for the password manager
@@ -82,14 +58,18 @@ class ManagerInterface(Tk):
         """
 
         super().__init__()
+
+        # Set initial values for instance variables
         self.authorization_key = ""
+
+        # Set window title, size, and background color
         self.title("Password Manager")
         self.config(pady=20, padx=20, bg=BLACK)
         self.minsize(width=500, height=450)
 
         # Make a frame and having it fill the whole window using pack
-        self.mainframe = Frame(self,  bg=BLACK)
-        self.mainframe.pack(fill=BOTH, expand=1)
+        self.mainframe = Frame(self, bg=BLACK)
+        self.mainframe.pack(fill="both", expand=True)
 
         # Canvas with a logo
         self.canvas = Canvas(self.mainframe, width=200, height=200, highlightthickness=0, bg=BLACK)
@@ -141,51 +121,91 @@ class ManagerInterface(Tk):
         self.mainframe.grid_columnconfigure(2, weight=1)
 
         try:
+        # Try to open the file 'hashed_key.txt' for reading
             open('hashed_key.txt', mode='r')
-
         except FileNotFoundError:
+        # If the file doesn't exist, prompt the user to create a new encryption key
             NewEncryptionInterface(self)
         else:
+        # If the file does exist, prompt the user to enter the encryption key
             CheckEncryptionInterface(self)
 
+        # Hide the main window
         self.withdraw()
+
+        # Start the main event loop to display the GUI
         self.mainloop()
+
+        # Save the password data to the file
         self.save_password()
 
-    def search_password(self):
+    def search_password(self) -> None:
         """Check if there is a password saved for a given website
+
+        This method gets the website name from the web_entry field in the GUI.
+        It then reads from a file called "data.txt" in the current directory,
+        and attempts to find the saved details for the given website. If found,
+        it shows a message box displaying the saved username and password.
+        If not found, it shows a message box saying no details have been saved.
+
+        Returns:
+            None
         """
 
+        # Get website name from GUI entry field
         website = self.web_entry.get()
+
         try:
+            # Read encrypted data from file
             with open("data.txt", "rb") as file:
                 data = file.read()
         except FileNotFoundError:
+            # Show message if file not found
             messagebox.showinfo(title="File not found", message="No Data File Found")
         else:
+            # Decrypt the data
             data = self.decrypt_data(data)
+
+            # Check if website is in the decrypted data
             if website.capitalize() in data:
+                # Get the stored username and password
                 user_name = data[website.capitalize()]["email"]
                 stored_pass = data[website.capitalize()]["password"]
+
+                # Show the username and password in a message box
                 messagebox.showinfo(title=website, message=f"Username: {user_name} \n"
                                                            f"Password: {stored_pass} \n")
             else:
+                # Show message if website not found in data
                 messagebox.showinfo(title=website, message="There are no details for this Website yet")
+
         finally:
+            # Clear the GUI entry field and delete the data variable
             self.web_entry.delete(0, END)
             del data
 
     def generate_password(self) -> None:
         """Generate a random password using letters, numbers and symbols
+
+        This method generates a random password of length between 8 and 10, with
+        2 to 4 symbols and 2 to 4 numbers included. It then shuffles the characters
+        and shows the generated password in the password_entry field in the GUI.
+        It also copies the password to the clipboard using pyperclip.
+
+        Returns:
+            None
         """
 
+        # Generate a list of random characters for the password
         password_list = [choice(LETTERS_LOWER + LETTERS_UPPER) for _ in range(randint(8, 10))] + \
                         [choice(SYMBOLS) for _ in range(randint(2, 4))] + \
                         [choice(NUMBERS) for _ in range(randint(2, 4))]
 
+        # Shuffle the characters and join them into a string
         shuffle(password_list)
         password = "".join(password_list)
 
+        # Clear the password entry field in the GUI, insert the generated password, and copy to clipboard
         self.password_entry.delete(0, END)
         self.password_entry.insert(0, password)
         pyperclip.copy(password)
@@ -194,36 +214,42 @@ class ManagerInterface(Tk):
         """
         Prepare dictionary containing the username and the password for a given website and save it to json file
         """
-
         website = self.web_entry.get()
         email = self.email_entry.get()
         password = self.password_entry.get()
+
+        # Create a new dictionary with website, email, and password and format it correctly for the JSON file
         new_data = {
             website.capitalize(): {
                 "email": email.lower(),
                 "password": password,
             }
         }
+
+        # Check if any of the fields are empty, if so, show an error message
         if website == "" or email == "" or password == "":
-            messagebox.showinfo(title="Empty Fields", message="One or more of the fields remain empty. Please fill all "
-                                                              "the fields")
+            messagebox.showinfo(title="Empty Fields", message="One or more of the fields remain empty. Please fill all the fields")
         else:
             try:
+                # Try to open the data file, and load the existing data
                 with open("data.txt", "rb") as file:
                     # load old data
                     data = file.read()
+                # Decrypt the existing data file
                 data = self.decrypt_data(data)
             except FileNotFoundError:
-                # save new data and create the file
+                # If no existing data file found, encrypt the new data, save it to a new file, and create that file
                 new_data = self.encrypt_data(new_data)
                 save_file("data.txt", new_data)
             else:
-                # update data with new data
+                # If there is an existing data file, update the data with the new data and save it to the file
                 data.update(new_data)
                 data = self.encrypt_data(data)
                 save_file("data.txt", data)
+                # Delete the data object
                 del data
             finally:
+                # Clear all the fields after everything is done
                 self.web_entry.delete(0, END)
                 self.email_entry.delete(0, END)
                 self.email_entry.insert(0, "example@email.com")
@@ -235,6 +261,7 @@ class ManagerInterface(Tk):
         :param data_file: json data
         :return: encrypted data as an object of Fernet class
         """
+        # Convert the data_file dictionary into bytes and encrypt it using Fernet with the authorization key
         data_file = base64.b64encode(str(data_file).encode('utf-8'))
         data_file = Fernet(base64.b64encode(self.authorization_key)).encrypt(data_file)
         return data_file
@@ -245,13 +272,14 @@ class ManagerInterface(Tk):
         :param data_file: an encrypted data as a Fernet class object
         :return: decrypted data as a JSON
         """
+        # Decrypt the data_file object using Fernet with the authorization key, then convert it back to JSON format
         data_file = Fernet(base64.b64encode(self.authorization_key)).decrypt(data_file)
         data_file = base64.b64decode(data_file)
         data_file = data_file.decode("utf-8").replace("'", "\"")
         data_file = json.loads(data_file)
         return data_file
 
-
+    
 class NewEncryptionInterface:
     """
     Class that creates interface for setting up an encryption key if the user opens the program for the first time.
@@ -264,9 +292,11 @@ class NewEncryptionInterface:
         Constructor of NewEncryptionInterface class. Creates the Toplevel object of the Tkinter class
         :param mng_interface: an object from main window class
         """
-
+        # Assign attributes
         self.manager = mng_interface
+        # Create a new Toplevel object
         self.top = Toplevel()
+        # Configure the window
         self.top.title("Encryption Key")
         self.top.config(padx=40, pady=20, bg=BLACK)
 
